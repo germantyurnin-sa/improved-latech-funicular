@@ -1,1 +1,1222 @@
+openapi: 3.0.0
+
+info:
+  title: Analytics events spec
+  version: 1.0.0
+  description: Спецификация событий аналитики
+
+servers:
+  - url: https://z.lmcdn.ru
+
+paths:
+  /batch/v1/zlog:
+    post:
+      operationId: batchV1Zlog
+      summary: Старая ручка аппов
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - id
+                  - event
+                properties:
+                  id:
+                    type: string
+                    description: UUID
+                  event:
+                    $ref: "#/components/schemas/Events"
+      responses:
+        200:
+          description: successful events parsing
+          content:
+            application/json:
+              example: {}
+              schema:
+                type: object
+        400:
+          description: Validation failed
+          content:
+            application/json:
+              example: {
+                "error": {
+                  "message": "Events validation failed",
+                  "event_error": [
+                    {"id": "123", "message": "Invalid country"}
+                  ]
+                }
+              }
+              schema:
+                $ref: "#/components/schemas/BatchV2ZlogError"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              example: {
+                "error": {
+                  "message": "Kafka is not ready"
+                }
+              }
+              schema:
+                $ref: "#/components/schemas/BatchV2ZlogError"
+
+  /batch/v2/zlog:
+    post:
+      operationId: batchV2Zlog
+      summary: Актуальная ручка аппов
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - id
+                  - event
+                properties:
+                  id:
+                    type: string
+                    description: UUID
+                  event:
+                    $ref: "#/components/schemas/Events"
+      responses:
+        200:
+          description: successful events parsing
+          content:
+            application/json:
+              example: {}
+              schema:
+                type: object
+        400:
+          description: Validation failed
+          content:
+            application/json:
+              example: {
+                "error": {
+                  "message": "Events validation failed",
+                  "event_error": [
+                    {"id": "123", "message": "Invalid country"}
+                  ]
+                }
+              }
+              schema:
+                $ref: "#/components/schemas/BatchV2ZlogError"
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              example: {
+                "error": {
+                  "message": "Kafka is not ready"
+                }
+              }
+              schema:
+                $ref: "#/components/schemas/BatchV2ZlogError"
+
+
+components:
+  schemas:
+    BatchV2ZlogFailedEvent:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+
+    BatchV2ZlogError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            event_error:
+              type: array
+              items:
+                $ref: "#/components/schemas/BatchV2ZlogFailedEvent"
+
+    # тут должны быть указаны все используемые события
+    Events:
+      oneOf:
+        - $ref: '#/components/schemas/profile.my_promocodes.pageview-v1'
+        - $ref: '#/components/schemas/profile.profile_main.click.open_promocodes.apps-v1'
+        - $ref: '#/components/schemas/profile.my_orders.click.open_promocodes.apps-v1'
+        - $ref: '#/components/schemas/profile.my_promocodes.first_visit_info.elementshow-v1'
+        - $ref: '#/components/schemas/profile.my_promocodes.first_visit_info.click.approve-v1'
+        - $ref: '#/components/schemas/profile.my_promocodes.promocode_add.select-v1'
+        - $ref: '#/components/schemas/profile.profile_main.profile_state.blockload-v1'
+        - $ref: '#/components/schemas/discovery_hub.blog.pageview-v1'
+        - $ref: '#/components/schemas/discovery_hub.blog.blockload-v1'
+        - $ref: '#/components/schemas/discovery_hub.blog.content_previewed-v1'
+        - $ref: '#/components/schemas/discovery_hub.blog.articles.click.open_content-v1'
+        - $ref: '#/components/schemas/discovery_hub.article.pageview-v1'
+        - $ref: '#/components/schemas/discovery_hub.article.elementshow-v1'
+        - $ref: '#/components/schemas/discovery_hub.article.blockload-v1'
+        - $ref: '#/components/schemas/discovery_hub.article.item_viewed-v1'
+        - $ref: '#/components/schemas/discovery_hub.article.pageclose-v1'
+
+    ####################
+    ###   Profile    ###
+    ####################
+
+    profile.my_promocodes.pageview-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при открытии раздела Мои промокоды в Профиле
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/pageview-v1'
+        - $ref: './schemas/pages.yaml#/profile.my_promocodes-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.my_promocodes.pageview-v1']
+        params:
+          properties:
+            elements:
+              type: array
+              description: Массив названий промокодов в разделе и их статусов в порядке как видит их пользователь. Возможные статусы
+
+                active - активный,
+
+                expired - истекший и неиспользованный ранее,
+
+                already_applied - использованный ранее
+              items:
+                type: object
+                properties:
+                  code: 
+                    type: string
+                    example: 'START'
+                  status: 
+                    type: string
+                    enum: ['active', 'expired', 'already_applied']
+                required:
+                  - code
+                  - status
+              example: 
+                - code: 'START'
+                  status: 'active'
+                - code: 'ЛЕТО21'
+                  status: 'expired'
+                - code: 'ПОКУПКИ33'
+                  status: 'already_applied'
+          required:
+            - elements
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-081862-061863-101864-091865-111866-101868",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1693922838147,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "my_promocodes",
+            "chapter": "profile",
+            "elements": [
+              {
+                "code": "CORP-SEP2023-25-X3DX4GHH-M",
+                "status": "active"
+              },
+              {
+                "code": "CORP-SEP2023-25-X6DMKX8L-M",
+                "status": "expired"
+              },
+              {
+                "code": "CORP1-SEP2023-15-X3DQD8KZ-M",
+                "status": "active"
+              },
+              {
+                "code": "CORP1-SEP2023-15-XCD43HN-M",
+                "status": "already_applied"
+              }
+            ]
+          },
+          "name": "profile.my_promocodes.pageview-v1",
+          "action": "pageview"
+        }
+
+    profile.profile_main.click.open_promocodes.apps-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при заходе в раздел Промокоды с главной страницы Профиля
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/click.open_promocodes-v1'
+        - $ref: './schemas/pages.yaml#/profile.profile_main-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.profile_main.click.open_promocodes.apps-v1']
+      required:
+        - name
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "iphone",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-081862-061863-101864-091865-111866-101868",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1693922838147,
+            "customer_id": 21263630,
+            "action_type": "open_promocodes",
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "profile_main",
+            "chapter": "profile",
+            "source": "orders_carousel",
+            "text": "У вас есть 16 промокодов на скидку"
+          },
+          "name": "profile.profile_main.click.open_promocodes.apps-v1",
+          "action": "click"
+        }
+
+    profile.my_orders.click.open_promocodes.apps-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при заходе в раздел Мои промокоды из карусели Мои заказы в Профиле
+
+        [скриншот](http://webdav.services.lamoda.ru/docs/zlog_events/promocodes1.png)
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/click.open_promocodes-v1'
+        - $ref: './schemas/pages.yaml#/profile.my_orders-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.my_orders.click.open_promocodes.apps-v1']
+        params:
+          properties:
+            source:
+              type: string
+              enum: ['orders_carousel']
+          required:
+            - source
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "iphone",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-081862-061863-101864-091865-111866-101868",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1693922838147,
+            "customer_id": 21263630,
+            "action_type": "open_promocodes",
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "my_orders",
+            "chapter": "profile",
+            "source": "orders_carousel",
+            "text": "У вас есть 16 промокодов на скидку"
+          },
+          "name": "profile.my_orders.click.open_promocodes.apps-v1",
+          "action": "click"
+        }
+
+    profile.my_promocodes.first_visit_info.elementshow-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при показе блока с информацией о разделе при первом посещении раздела
+
+        [скриншот APPS](http://webdav.services.lamoda.ru/docs/zlog_events/promocodes4_app.png)
+        [скриншот WEB](http://webdav.services.lamoda.ru/docs/zlog_events/promocodes4_web.png)
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/elementshow-v1'
+        - $ref: './schemas/pages.yaml#/profile.my_promocodes-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.my_promocodes.first_visit_info.elementshow-v1']
+        params:
+          properties:
+            block:
+              type: string
+              enum: ['first_visit_info']
+          required:
+            - block
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+          "timestamp": 1693998765393,
+          "customer_id": 21263630,
+          "auth_customer_id": 21263630,
+          "app_version": "1.0.0",
+          "page_type": "my_promocodes",
+          "chapter": "profile",
+          "block": "first_visit_info"
+          },
+          "name": "profile.my_promocodes.first_visit_info.elementshow-v1",
+          "action": "elementshow"
+        }
+
+    profile.my_promocodes.first_visit_info.click.approve-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Нажатие кнопки "Спасибо, все понятно" в инфоблоке при первом посещении раздела
+
+        [скриншот APPS](http://webdav.services.lamoda.ru/docs/zlog_events/promocodes4_app.png)
+        [скриншот WEB](http://webdav.services.lamoda.ru/docs/zlog_events/promocodes4_web.png)
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/click.approve-v1'
+        - $ref: './schemas/pages.yaml#/profile.my_promocodes-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.my_promocodes.first_visit_info.click.approve-v1']
+        params:
+          properties:
+            block:
+              type: string
+              enum: ['first_visit_info']
+          required:
+            - block
+      required:
+        - name
+        - params
+      
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1693998867471,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "action_type": "approve",
+            "page_type": "my_promocodes",
+            "chapter": "profile",
+            "block": "first_visit_info"
+          },
+          "name": "profile.my_promocodes.first_visit_info.click.approve-v1",
+          "action": "click"
+        }
+
+    profile.my_promocodes.promocode_add.select-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Выбор промокода из списка доступных в разделе Профиля Мои промокоды
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/promocode_add-v1'
+        - $ref: './schemas/pages.yaml#/profile.my_promocodes-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.my_promocodes.promocode_add.select-v1']
+        params:
+          properties:
+            action_type:
+              type: string
+              enum: ['select']
+          required:
+            - action_type
+      required:
+        - name
+        - params
+      
+      example:
+        {
+          "country": "ru",
+          "lid": "9D024064183CDF649309B70802462F16",
+          "platform": "desktop",
+          "params": {
+              "ab_error": 0,
+              "split_buckets": "v3-118-01-08-091823-021830-031838-081841-031842-111846-041847-011849-101851-111852-061853-021854-041855-011856-101858-031862-111863-031864-031865-051866-121868-121869-041870",
+              "ab_experiments": [
+                  "3657",
+                  "3611",
+                  "3651",
+                  "3648",
+                  "3587",
+                  "3593",
+                  "3639",
+                  "3623",
+                  "3625",
+                  "3626",
+                  "3655",
+                  "3658"
+              ],
+              "timestamp": 1693999081282,
+              "customer_id": 1036476164,
+              "auth_customer_id": 1036476164,
+              "app_version": "1.0.0",
+              "action_type": "select",
+              "page_type": "my_promocodes",
+              "chapter": "profile",
+              "promocode_name": "CORP-SEP2023-25-D3SX4GHH-M",
+              "text": "Скидка на 25%"
+          },
+          "name": "profile.my_promocodes.promocode_add.select-v1",
+          "action": "promocode_add"
+        }
+
+    profile.profile_main.profile_state.blockload-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        При заходе в Профиль отправляется состояние профиля клиента,
+
+        какой у него процент лояльности, сколько заказов и тд.
+
+        NB! на некоторых платформах ивент уже отправляется. На них нужно добавить в params.elements параметр,
+
+        показывающий кол-во активных доступных пользователю промокодов партнеров - partner_promocodes.
+
+        Обычно это кол-во пишется на пункте меню Промокоды в Профиле
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/blockload-v1'
+        - $ref: './schemas/blocks.yaml#/profile_state-v1'
+        - $ref: './schemas/pages.yaml#/profile.profile_main-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['profile.profile_main.profile_state.blockload-v1']
+      required:
+        - name
+
+      example:
+        {
+          "country": "ru",
+          "lid": "9D024064183CDF649309B70802462F16",
+          "platform": "desktop",
+          "params": {
+              "ab_error": 0,
+              "split_buckets": "v3-118-01-08-091823-021830-031838-081841-031842-111846-041847-011849-101851-111852-061853-021854-041855-011856-101858-031862-111863-031864-031865-051866-121868-121869-041870",
+              "ab_experiments": [
+                  "3657",
+                  "3611",
+                  "3651",
+                  "3648",
+                  "3587",
+                  "3593",
+                  "3639",
+                  "3623",
+                  "3625",
+                  "3626",
+                  "3655",
+                  "3658"
+              ],
+              "timestamp": 1693999081282,
+              "customer_id": 1036476164,
+              "auth_customer_id": 1036476164,
+              "app_version": "1.0.0",
+              "page_type": "profile_main",
+              "chapter": "profile",
+              "block": "profile_state",
+              "elements": {
+                "giftcards": 0,
+                "loyalty_percent": 7,
+                "total_orders": 33,
+                "items_in_transit": 0,
+                "reviews": 0,
+                "items_to_review": 2,
+                "barcode": true,
+                "buyout_percent": 19,
+                "photo": false,
+                "qa": false,
+                "loyalty_promo": 2,
+                "current_orders": 0,
+                "partner_promocodes": 9
+              }
+          },
+          "name": "profile.profile_main.profile_state.blockload-v1",
+          "action": "blockload"
+        }
+
+    #########################
+    ###   Discovery hub   ###
+    #########################
+
+    discovery_hub.blog.pageview-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при открытии странички Журнала (blog)
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/pageview-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.blog-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.blog.pageview-v1']
+        params:
+          properties:
+            gender:
+              type: string
+              enum: ['women', 'men', 'kids']
+      required:
+        - name
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000003163,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "blog",
+            "chapter": "discovery_hub",
+            "gender": "women"
+          },
+          "name": "discovery_hub.blog.pageview-v1",
+          "action": "pageview"
+        }
+
+    discovery_hub.blog.blockload-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Загрузка баннера со статьями
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/blockload-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.blog-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.blog.blockload-v1']
+        params:
+          properties:
+            elements:
+              type: string
+              description: Массив показаных статей
+                -порядок статьи (сверху-внизу, слева-направо)
+                -blog
+                -ID статьи
+                -article
+                -Название статьи
+              example: '0:blog:33642753:article:Образ недели: возвращение скинни;'
+          required:
+            - elements
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000003161,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "blog",
+            "chapter": "discovery_hub",
+            "elements": "0:blog;39149027;article;Капсула недели: с кардиганом в стиле 70-х;1:blog;38089971;article;Четыре бренда экологичных кроссовок из кожи кактуса, «океанской пряжи» и соевых чернил;"
+          },
+          "name": "discovery_hub.blog.blockload-v1",
+          "action": "blockload"
+        }
+
+    discovery_hub.blog.content_previewed-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при показе конктента на страничке Журнала (blog),
+        то есть статьи, которые пользователь увидел при загрузке странички под баннером
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/content_previewed-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.blog-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.blog.content_previewed-v1']
+        params:
+          properties:
+            elements:
+              type: string
+              description: Массив показаных статей вида
+                -порядок статьи (сверху-внизу, слева-направо)
+                -blog
+                -ID статьи
+                -article
+                -Название статьи
+              example: '0:blog:33642753:article:Образ недели: возвращение скинни;'
+          required:
+            - elements
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000206480,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "blog",
+            "chapter": "discovery_hub",
+            "elements": "0:blog;39100830;article;Гид по трендам осени;1:blog;39108179;article;Что такое скин-флудинг, и спасет ли тренд из соцсетей вашу кожу осенью;2:blog;39148855;article;Капсула недели: с дерзкой кожаной курткой;3:blog;39073464;article;Тренд сентября: конфетные стрелки;4:blog;39046428;article;Какая верхняя одежда будет актуальна в новом сезоне? Шесть трендовых моделей на осень 2023;5:blog;39013264;article;Тонер-пэды, молочко для волос, массажер для головы — рассказываем о самых интересных новинках сезона;6:blog;38986202;article;Капсула недели: с юбкой-баллоном;7:blog;38915217;article;По дресс-коду будет пятерка: детские бренды, у которых стоит искать одежду для школы;8:blog;39162746;article;15 главных тенденций сезона;9:blog;38890461;article;Устали от кроссовок? Носите аккуратные балетки — главный тренд лета и осени;10:blog;38885772;article;Купить прямо сейчас: косметика до 1000 рублей, которую обожают визажисты;11:blog;38747975;article;Капсула недели: с вещами в технике кроше;12:blog;38759117;article;Доступная роскошь:  самая красивая бижутерия месяца, которая заметна издалека;13:blog;38694342;article;Как одеться на 1 сентября? Семь непохожих образов для разных мам;14:blog;38542572;article;Такие разные джинсы: с какой обувью носить скинни, клеш и другие актуальные модели сезона;15:blog;38668560;article;Капсула недели: теннисная эстетика;16:blog;38542495;article;Что купить на распродаже сейчас, чтобы носить осенью;17:blog;38537841;article;Снимать макияж и одновременно ухаживать за кожей? Легко, вот 6 очищающих бальзамов для этого;18:blog;38465238;article;Вот это пара: обувь для тех, кто следит за трендами и выбирает комфорт;19:blog;38468259;article;Капсула недели: в стиле Марго Робби;"
+          },
+          "name": "discovery_hub.blog.content_previewed-v1",
+          "action": "content_previewed"
+        }
+
+    discovery_hub.blog.articles.click.open_content-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Отправляется при клике на статью
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/click.open_content-v1'
+        - $ref: './schemas/blocks.yaml#/articles-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.blog-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.blog.articles.click.open_content-v1']
+        params:
+          properties:
+            content_name:
+              type: string
+              description: Название статьи, на которую кликнули
+              example: 'Образ недели: возвращение скинни'
+            content_id:
+              type: integer
+              description: ID статьи
+          required:
+            - content_name
+            - content_id
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000338249,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "action_type": "open_content",
+            "block": "articles",
+            "chapter": "discovery_hub",
+            "page_type": "blog",
+            "content_id": 39073464,
+            "content_name": "Тренд сентября: конфетные стрелки"
+          },
+          "name": "discovery_hub.blog.articles.click.open_content-v1",
+          "action": "click"
+        }
+
+    discovery_hub.article.pageview-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Открытие статьи из Журнала
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/pageview-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.article-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.article.pageview-v1']
+        params:
+          properties:
+            gender:
+              type: string
+              enum: ['women', 'men', 'kids']
+      required:
+        - name
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000418606,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "article",
+            "chapter": "discovery_hub",
+            "content_id": 39073464,
+            "content_name": "Тренд сентября: конфетные стрелки",
+            "gender": "women"
+          },
+          "name": "discovery_hub.article.pageview-v1",
+          "action": "pageview"
+        }
+
+    discovery_hub.article.elementshow-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Показ баннера в статье
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/elementshow-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.article-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.article.elementshow-v1']
+        params:
+          properties:
+            element:
+              type: string
+              description: Указываем, что показыли за элемент, в данном случае баннер
+              example: 'banner'
+          required:
+            - element
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000418606,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "article",
+            "chapter": "discovery_hub",
+            "content_id": 39073464,
+            "content_name": "Тренд сентября: конфетные стрелки",
+            "element": "banner"
+          },
+          "name": "discovery_hub.article.elementshow-v1",
+          "action": "elementshow"
+        }
+
+    discovery_hub.article.blockload-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Загрузка блока с SKU
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/blockload-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.article-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.article.blockload-v1']
+        params:
+          properties:
+            elements:
+              type: string
+              description: Массив загруженных SKU в блоке с указанием порядкового номера
+              example: '0:RTLACA838201;1:MP002XW07R0Z;2:RTLABZ768601;'
+            gender:
+              type: string
+              enum: ['women', 'men', 'kids']
+          required:
+            - elements
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000537122,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "article",
+            "chapter": "discovery_hub",
+            "content_id": 39149027,
+            "content_name": "Капсула недели: с кардиганом в стиле 70-х",
+            "elements": "0:RTLACT077801;1:MP002XW1CK3T;2:MP002XW0EEVQ;3:RTLACU175101;4:RTLACW468401;5:MP002XW0JOS3;6:MP002XW0FNDU;7:MP002XW0CSCG;8:RTLACT577101;9:RTLACU209301;10:MP002XW0EL3W;11:MP002XW0JS03;12:RTLACX263301;13:MP002XW1CH2G;14:RTLACM760301;15:MP002XW1CH0J;16:MP002XW0BT5Q",
+            "gender": "women"
+          },
+          "name": "discovery_hub.article.blockload-v1",
+          "action": "blockload"
+        }
+
+    discovery_hub.article.item_viewed-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Просмотр SKU пользователем
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/item_viewed-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.article-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.article.item_viewed-v1']
+      required:
+        - name
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000537122,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "article",
+            "chapter": "discovery_hub",
+            "content_id": 39149027,
+            "content_name": "Капсула недели: с кардиганом в стиле 70-х",
+            "elements": "0:RTLACT077801;1:MP002XW1CK3T;2:MP002XW0EEVQ;3:RTLACU175101;4:RTLACW468401;5:MP002XW0JOS3;6:MP002XW0FNDU;7:MP002XW0CSCG;8:RTLACT577101;9:RTLACU209301;10:MP002XW0EL3W;11:MP002XW0JS03;12:RTLACX263301;13:MP002XW1CH2G;14:RTLACM760301;15:MP002XW1CH0J;16:MP002XW0BT5Q",
+
+          },
+          "name": "discovery_hub.article.item_viewed-v1",
+          "action": "item_viewed"
+        }
+
+    discovery_hub.article.pageclose-v1:
+      x-zlog-type: 'event'
+
+      description: >
+        Закрытие статьи из Журнала
+
+      allOf:
+        - $ref: './schemas/actions.yaml#/pageclose-v1'
+        - $ref: './schemas/pages.yaml#/discovery_hub.article-v1'
+
+      properties:
+        name:
+          type: string
+          enum: ['discovery_hub.article.pageclose-v1']
+        params:
+          properties:
+            view_time:
+              type: integer
+              description: Время от момента открытия до момента закрытия страницы в секундах
+              example: 60
+            view_fraction:
+              type: number
+              format: float
+              description: Какая часть статьи была просмотрена (доля прокрутки страницы)
+                значение в интервале [0, 1]
+              example: 0.5
+          required:
+            - view_time
+            - view_fraction
+      required:
+        - name
+        - params
+
+      example:
+        {
+          "country": "ru",
+          "lid": "0100007F7B3DDE640700ED9602040303",
+          "platform": "desktop",
+          "params": {
+            "ab_error": 0,
+            "split_buckets": "v3-118-06-03-121823-061830-101838-031841-031842-111846-071847-091849-081851-071852-101853-031854-071855-121856-021858-111859-081862-061863-101864-111866-101868-051869-021870-091871-041872",
+            "ab_experiments": [
+              "3656",
+              "3612",
+              "3650",
+              "3649",
+              "3587",
+              "3594",
+              "3639",
+              "3623",
+              "3625",
+              "3627",
+              "3654",
+              "3659"
+            ],
+            "timestamp": 1694000537122,
+            "customer_id": 21263630,
+            "auth_customer_id": 21263630,
+            "app_version": "1.0.0",
+            "page_type": "article",
+            "chapter": "discovery_hub",
+            "content_id": 39149027,
+            "content_name": "Капсула недели: с кардиганом в стиле 70-х",
+            "view_time": 60,
+            "view_fraction": 0.7
+          },
+          "name": "discovery_hub.article.pageclose-v1",
+          "action": "pageclose"
+        }
 
